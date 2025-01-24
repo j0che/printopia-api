@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import ModelViewer from "@/components/ModelViewer";
 import PrintingParameters, { PrintParameters } from "@/components/PrintingParameters";
 import { useToast } from "@/components/ui/use-toast";
+import { printingApi } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File>();
@@ -14,11 +16,41 @@ const Index = () => {
   });
   const { toast } = useToast();
 
+  const calculateCostMutation = useMutation({
+    mutationFn: printingApi.calculateCost,
+    onError: (error) => {
+      toast({
+        title: "Error calculating cost",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const submitJobMutation = useMutation({
+    mutationFn: printingApi.submitPrintJob,
+    onSuccess: () => {
+      toast({
+        title: "Print job submitted",
+        description: "Your print job has been submitted successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error submitting print job",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       if (file.name.toLowerCase().endsWith('.stl')) {
         setSelectedFile(file);
+        // Recalculate cost when file changes
+        calculateCostMutation.mutate(parameters);
       } else {
         toast({
           title: "Invalid file type",
@@ -29,14 +61,26 @@ const Index = () => {
     }
   };
 
-  const calculateCost = (parameters: PrintParameters) => {
-    // This is a simple example calculation
-    const basePrice = 10; // Base price in your currency
-    const volumeMultiplier = parameters.scale / 100;
-    const qualityMultiplier = 1 / parameters.layerHeight;
-    const infillMultiplier = parameters.infill / 100;
-    
-    return (basePrice * volumeMultiplier * qualityMultiplier * infillMultiplier).toFixed(2);
+  const handleParametersChange = (newParameters: PrintParameters) => {
+    setParameters(newParameters);
+    // Recalculate cost when parameters change
+    calculateCostMutation.mutate(newParameters);
+  };
+
+  const handleSubmit = () => {
+    if (!selectedFile) {
+      toast({
+        title: "No file selected",
+        description: "Please upload an STL file first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    submitJobMutation.mutate({
+      file: selectedFile,
+      parameters,
+    });
   };
 
   return (
@@ -62,7 +106,7 @@ const Index = () => {
           {selectedFile ? (
             <ModelViewer file={selectedFile} />
           ) : (
-            <div className="model-viewer flex items-center justify-center">
+            <div className="h-[400px] flex items-center justify-center">
               <p className="text-muted-foreground">Upload an STL file to preview</p>
             </div>
           )}
@@ -70,20 +114,25 @@ const Index = () => {
 
         <Card className="p-6">
           <h2 className="text-2xl font-semibold mb-4">Print Settings</h2>
-          <PrintingParameters onParametersChange={setParameters} />
+          <PrintingParameters onParametersChange={handleParametersChange} />
           
           <div className="mt-8 p-4 bg-secondary rounded-lg">
             <h3 className="text-xl font-semibold mb-2">Estimated Cost</h3>
             <p className="text-3xl font-bold text-primary">
-              ${calculateCost(parameters)}
+              ${calculateCostMutation.data?.cost.toFixed(2) ?? '0.00'}
             </p>
             <p className="text-sm text-muted-foreground mt-2">
               Final price may vary based on additional factors
             </p>
           </div>
 
-          <Button className="w-full mt-4" size="lg">
-            Submit Print Job
+          <Button 
+            className="w-full mt-4" 
+            size="lg"
+            onClick={handleSubmit}
+            disabled={!selectedFile || submitJobMutation.isPending}
+          >
+            {submitJobMutation.isPending ? 'Submitting...' : 'Submit Print Job'}
           </Button>
         </Card>
       </div>
