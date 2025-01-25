@@ -2,36 +2,36 @@ import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:8000', // Change this to your FastAPI server URL
+  baseURL: 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+export interface PrintParameters {
+  layerHeight: number;
+  infill: number;
+  scale: number;
+}
+
 export interface PrintJobRequest {
   file: File;
-  parameters: {
-    layerHeight: number;
-    infill: number;
-    scale: number;
-  };
+  parameters: PrintParameters;
 }
 
 export interface PrintJobResponse {
   id: string;
-  cost: number;
-  estimatedTime: number;
+  tempFolderId: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
 }
 
-export const printingApi = {
-  // Calculate cost without submitting job
-  calculateCost: async (parameters: PrintJobRequest['parameters']) => {
-    const response = await api.post<{ cost: number }>('/api/calculate-cost', parameters);
-    return response.data;
-  },
+export interface PriceResponse {
+  cost: number;
+  currency: string;
+}
 
-  // Submit print job
+export const printingApi = {
+  // Submit print job and create temp folder
   submitPrintJob: async (data: PrintJobRequest) => {
     const formData = new FormData();
     formData.append('file', data.file);
@@ -42,6 +42,12 @@ export const printingApi = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  // Get price from price.json
+  getPrice: async (tempFolderId: string) => {
+    const response = await api.get<PriceResponse>(`/api/print-jobs/${tempFolderId}/price`);
     return response.data;
   },
 

@@ -5,7 +5,7 @@ import ModelViewer from "@/components/ModelViewer";
 import PrintingParameters, { PrintParameters } from "@/components/PrintingParameters";
 import { useToast } from "@/components/ui/use-toast";
 import { printingApi } from "@/lib/api";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 const Index = () => {
   const [selectedFile, setSelectedFile] = useState<File>();
@@ -14,30 +14,28 @@ const Index = () => {
     infill: 20,
     scale: 100,
   });
+  const [tempFolderId, setTempFolderId] = useState<string>();
   const { toast } = useToast();
 
-  const calculateCostMutation = useMutation({
-    mutationFn: printingApi.calculateCost,
-    onError: (error) => {
-      toast({
-        title: "Error calculating cost",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
+  // Query for getting price from price.json
+  const priceQuery = useQuery({
+    queryKey: ['price', tempFolderId],
+    queryFn: () => tempFolderId ? printingApi.getPrice(tempFolderId) : null,
+    enabled: !!tempFolderId,
   });
 
   const submitJobMutation = useMutation({
     mutationFn: printingApi.submitPrintJob,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setTempFolderId(data.tempFolderId);
       toast({
-        title: "Print job submitted",
-        description: "Your print job has been submitted successfully",
+        title: "Files uploaded",
+        description: "Your files have been uploaded and the price has been calculated",
       });
     },
     onError: (error) => {
       toast({
-        title: "Error submitting print job",
+        title: "Error uploading files",
         description: error.message,
         variant: "destructive",
       });
@@ -49,8 +47,11 @@ const Index = () => {
     if (file) {
       if (file.name.toLowerCase().endsWith('.stl')) {
         setSelectedFile(file);
-        // Recalculate cost when file changes
-        calculateCostMutation.mutate(parameters);
+        // Submit job when file is selected to create temp folder
+        submitJobMutation.mutate({
+          file,
+          parameters,
+        });
       } else {
         toast({
           title: "Invalid file type",
@@ -63,24 +64,13 @@ const Index = () => {
 
   const handleParametersChange = (newParameters: PrintParameters) => {
     setParameters(newParameters);
-    // Recalculate cost when parameters change
-    calculateCostMutation.mutate(newParameters);
-  };
-
-  const handleSubmit = () => {
-    if (!selectedFile) {
-      toast({
-        title: "No file selected",
-        description: "Please upload an STL file first",
-        variant: "destructive",
+    // Resubmit job when parameters change
+    if (selectedFile) {
+      submitJobMutation.mutate({
+        file: selectedFile,
+        parameters: newParameters,
       });
-      return;
     }
-
-    submitJobMutation.mutate({
-      file: selectedFile,
-      parameters,
-    });
   };
 
   return (
@@ -118,22 +108,19 @@ const Index = () => {
           
           <div className="mt-8 p-4 bg-secondary rounded-lg">
             <h3 className="text-xl font-semibold mb-2">Estimated Cost</h3>
-            <p className="text-3xl font-bold text-primary">
-              ${calculateCostMutation.data?.cost.toFixed(2) ?? '0.00'}
-            </p>
+            {priceQuery.isLoading ? (
+              <p className="text-3xl font-bold text-primary">Calculating...</p>
+            ) : priceQuery.data ? (
+              <p className="text-3xl font-bold text-primary">
+                ${priceQuery.data.cost.toFixed(2)} {priceQuery.data.currency}
+              </p>
+            ) : (
+              <p className="text-3xl font-bold text-primary">$0.00</p>
+            )}
             <p className="text-sm text-muted-foreground mt-2">
               Final price may vary based on additional factors
             </p>
           </div>
-
-          <Button 
-            className="w-full mt-4" 
-            size="lg"
-            onClick={handleSubmit}
-            disabled={!selectedFile || submitJobMutation.isPending}
-          >
-            {submitJobMutation.isPending ? 'Submitting...' : 'Submit Print Job'}
-          </Button>
         </Card>
       </div>
     </div>
