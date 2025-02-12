@@ -1,10 +1,15 @@
+
 import axios from 'axios';
 
 // Create axios instance with base configuration
 const api = axios.create({
+  // Anpassung der baseURL für das Rust-Backend
   baseURL: 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
+    // CORS Headers für Rust Backend
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   },
 });
 
@@ -37,23 +42,38 @@ export const printingApi = {
     formData.append('file', data.file);
     formData.append('parameters', JSON.stringify(data.parameters));
 
-    const response = await api.post<PrintJobResponse>('/api/print-jobs', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    return response.data;
+    try {
+      const response = await api.post<PrintJobResponse>('/api/print-jobs', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting print job:', error);
+      throw error;
+    }
   },
 
   // Get price from price.json
   getPrice: async (tempFolderId: string) => {
-    const response = await api.get<PriceResponse>(`/api/print-jobs/${tempFolderId}/price`);
-    return response.data;
+    try {
+      const response = await api.get<PriceResponse>(`/api/print-jobs/${tempFolderId}/price`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting price:', error);
+      throw error;
+    }
   },
 
   // Get job status
   getPrintJobStatus: async (jobId: string) => {
-    const response = await api.get<PrintJobResponse>(`/api/print-jobs/${jobId}`);
-    return response.data;
+    try {
+      const response = await api.get<PrintJobResponse>(`/api/print-jobs/${jobId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting job status:', error);
+      throw error;
+    }
   },
 };
